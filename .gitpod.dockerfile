@@ -1,8 +1,7 @@
-FROM gitpod/workspace-base:latest
-
-RUN echo "CI version from base"
+FROM gitpod/workspace-base:latest as base-image
 
 ### NodeJS ###
+FROM base-image as node-image
 USER gitpod
 ENV NODE_VERSION=16.13.0
 ENV TRIGGER_REBUILD=1
@@ -15,6 +14,7 @@ RUN curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh |
 ENV PATH=$PATH:/home/gitpod/.nvm/versions/node/v${NODE_VERSION}/bin
 
 ### Python ###
+FROM node-image as python-image
 USER gitpod
 RUN sudo install-packages python3-pip
 
@@ -37,9 +37,11 @@ ENV PYTHONUSERBASE=/workspace/.pip-modules \
 ENV PATH=$PYTHONUSERBASE/bin:$PATH
 
 # Setup Heroku CLI
+FROM python-image as heroku-image
 RUN curl https://cli-assets.heroku.com/install.sh | sh
 
 # Setup MongoDB and MySQL
+FROM heroku-image as mongo-image
 RUN sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 20691eec35216c63caf66ce1656408e390cfb1f5 && \
     sudo sh -c 'echo "deb http://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list'  && \
     sudo apt-get update -y  && \
@@ -53,7 +55,7 @@ RUN sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 20691eec35
     sudo chown -R gitpod:gitpod /etc/mysql /var/run/mysqld /var/log/mysql /var/lib/mysql /var/lib/mysql-files /var/lib/mysql-keyring /var/lib/mysql-upgrade /home/gitpod/.cache/heroku/
 
 # Setup PostgreSQL
-
+FROM mongo-image as postgres-image
 RUN sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list' && \
     sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8 && \
     sudo apt-get update -y && \
@@ -100,6 +102,10 @@ RUN echo 'alias run="python3 $GITPOD_REPO_ROOT/manage.py runserver 0.0.0.0:8000"
     echo '    . "$GITPOD_REPO_ROOT/.vscode/post_upgrade.sh"' >> ~/.bashrc && \
     echo "  fi" >> ~/.bashrc && \
     echo "fi" >> ~/.bashrc
+
+
+RUN echo "CI version from base"
+FROM postgres-image as code-institue-base
 
 # Local environment variables
 # C9USER is temporary to allow the MySQL Gist to run
